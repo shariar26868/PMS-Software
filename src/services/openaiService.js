@@ -1,6 +1,6 @@
 // OpenAI Service for Feature Requirement Extraction & Subtask Generation
 
-const OPENAI_API_KEY = ''; // Set your API key via the UI or environment variable
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
 
 /**
  * Analyzes document text using OpenAI API to extract structured features.
