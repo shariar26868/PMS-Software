@@ -837,6 +837,81 @@ export function ProjectProvider({ children }) {
     showToast('Feature deleted.', 'info');
   };
 
+  // Action: Update Module Description
+  const updateModuleDescription = (projectId, moduleName, newDescription) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p;
+      const updatedModules = (p.modules || []).map(m => {
+        if (typeof m === 'string') {
+          return m === moduleName ? { id: `mod-${Date.now()}`, name: m, description: newDescription, color: '#6366F1' } : m;
+        }
+        return m.name === moduleName ? { ...m, description: newDescription } : m;
+      });
+      return { ...p, modules: updatedModules };
+    }));
+    showToast(`Module "${moduleName}" description updated!`, 'success');
+  };
+
+  // Action: Add New Module
+  const addModule = (projectId, moduleName) => {
+    const trimmed = moduleName.trim();
+    if (!trimmed) return;
+    const moduleColors = ['#10B981', '#6366F1', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#14B8A6'];
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p;
+      const existing = (p.modules || []).map(m => typeof m === 'string' ? m : m.name);
+      if (existing.includes(trimmed)) {
+        showToast(`Module "${trimmed}" already exists.`, 'info');
+        return p;
+      }
+      const newMod = {
+        id: `mod-${Date.now()}`,
+        name: trimmed,
+        description: `${trimmed} module requirements & scope`,
+        progress: 0,
+        color: moduleColors[(p.modules || []).length % moduleColors.length]
+      };
+      return { ...p, modules: [...(p.modules || []), newMod] };
+    }));
+    showToast(`Module "${trimmed}" added!`, 'success');
+  };
+
+  // Action: Rename Module (also updates features)
+  const updateModuleName = (projectId, oldName, newName) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    // Update project module object
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p;
+      const updatedModules = (p.modules || []).map(m => {
+        if (typeof m === 'string') return m === oldName ? trimmed : m;
+        return m.name === oldName ? { ...m, name: trimmed } : m;
+      });
+      return { ...p, modules: updatedModules };
+    }));
+    // Also rename module in all features of this project
+    setFeatures(prev => prev.map(f =>
+      f.projectId === projectId && f.module === oldName ? { ...f, module: trimmed } : f
+    ));
+    showToast(`Module renamed to "${trimmed}"!`, 'success');
+  };
+
+  // Action: Delete Module
+  const deleteModule = (projectId, moduleName) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p;
+      const updatedModules = (p.modules || []).filter(m =>
+        typeof m === 'string' ? m !== moduleName : m.name !== moduleName
+      );
+      return { ...p, modules: updatedModules };
+    }));
+    // Features in deleted module get reassigned to 'General'
+    setFeatures(prev => prev.map(f =>
+      f.projectId === projectId && f.module === moduleName ? { ...f, module: 'General' } : f
+    ));
+    showToast(`Module "${moduleName}" deleted. Features moved to General.`, 'info');
+  };
+
   // Action: Toggle Subtask
   const toggleSubtask = (featureId, subtaskId) => {
     setFeatures(prev => prev.map(f => {
@@ -993,6 +1068,10 @@ export function ProjectProvider({ children }) {
       deleteFeature,
       toggleSubtask,
       addSubtasksToFeature,
+      updateModuleDescription,
+      updateModuleName,
+      addModule,
+      deleteModule,
       resetToDefaultData,
 
       // Filters & Views

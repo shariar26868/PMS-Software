@@ -1,24 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProject } from '../context/ProjectContext';
 import { X, Plus, UserCheck, Calendar, Clock, ShieldAlert, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function ManualFeatureModal() {
-  const { isManualModalOpen, setIsManualModalOpen, addManualFeature, moduleList, developers } = useProject();
+  const {
+    isManualModalOpen,
+    setIsManualModalOpen,
+    addManualFeature,
+    moduleList,
+    developers,
+    users,
+    activeProjectId,
+    addModule
+  } = useProject();
 
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    module: moduleList[0],
+    module: moduleList[0] || '',
     priority: 'Medium',
     deadline: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-    assignedDev: developers[0].name,
+    assignedDev: '',
     dependencies: 'None',
     acceptanceCriteria: '',
     estimatedHours: 12,
     status: 'To Do'
   });
 
+  const [newModuleMode, setNewModuleMode] = useState(false);
+  const [newModuleDraft, setNewModuleDraft] = useState('');
+
+  // Sync formData defaults whenever modal opens
+  useEffect(() => {
+    if (isManualModalOpen) {
+      // Build dev list from real users
+      const devUsers = users
+        ? users.filter(u => u.role === 'developer' || u.role === 'admin')
+        : [];
+      const defaultDev = devUsers.length > 0 ? devUsers[0].name : (developers[0]?.name || '');
+
+      setFormData({
+        name: '',
+        description: '',
+        module: moduleList[0] || '',
+        priority: 'Medium',
+        deadline: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+        assignedDev: defaultDev,
+        dependencies: 'None',
+        acceptanceCriteria: '',
+        estimatedHours: 12,
+        status: 'To Do'
+      });
+      setNewModuleMode(false);
+      setNewModuleDraft('');
+    }
+  }, [isManualModalOpen]);
+
+  // Build developer options from real users list
+  const devOptions = users
+    ? users.filter(u => u.role === 'developer' || u.role === 'admin')
+    : developers;
+
   if (!isManualModalOpen) return null;
+
+  const handleAddNewModule = () => {
+    if (newModuleDraft.trim()) {
+      addModule(activeProjectId, newModuleDraft.trim());
+      setFormData(prev => ({ ...prev, module: newModuleDraft.trim() }));
+      setNewModuleDraft('');
+      setNewModuleMode(false);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -69,7 +121,18 @@ export default function ManualFeatureModal() {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">Module / Category</label>
+              <label className="text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                <span>Module / Category</span>
+                <button
+                  type="button"
+                  onClick={() => { setNewModuleMode(v => !v); setNewModuleDraft(''); }}
+                  className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-indigo-400 transition-colors font-normal"
+                  title="Add new module"
+                >
+                  <Plus className="w-3 h-3" /> New
+                </button>
+              </label>
+
               <select
                 value={formData.module}
                 onChange={e => setFormData({ ...formData, module: e.target.value })}
@@ -79,7 +142,28 @@ export default function ManualFeatureModal() {
                   <option key={m} value={m}>{m}</option>
                 ))}
               </select>
+
+              {/* Inline new module input — only shown when + clicked */}
+              {newModuleMode && (
+                <div className="flex gap-1.5 mt-1.5">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="New module name..."
+                    value={newModuleDraft}
+                    onChange={e => setNewModuleDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); handleAddNewModule(); }
+                      if (e.key === 'Escape') { setNewModuleMode(false); setNewModuleDraft(''); }
+                    }}
+                    className="flex-1 bg-slate-950 border border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <button type="button" onClick={handleAddNewModule} className="px-3 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 text-xs font-semibold transition-colors">Add</button>
+                  <button type="button" onClick={() => { setNewModuleMode(false); setNewModuleDraft(''); }} className="px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs transition-colors">✕</button>
+                </div>
+              )}
             </div>
+
           </div>
 
           {/* Description */}
@@ -147,8 +231,10 @@ export default function ManualFeatureModal() {
                 onChange={e => setFormData({ ...formData, assignedDev: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
-                {developers.map(d => (
-                  <option key={d.name} value={d.name}>{d.name} ({d.role})</option>
+                {devOptions.map(d => (
+                  <option key={d.id || d.name} value={d.name}>
+                    {d.name}{d.devRole || d.role ? ` (${d.devRole || d.role})` : ''}
+                  </option>
                 ))}
               </select>
             </div>

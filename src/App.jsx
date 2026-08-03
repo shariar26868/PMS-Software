@@ -20,7 +20,8 @@ import AnalyticsView from './components/AnalyticsView';
 import DevProfilesView from './components/DevProfilesView';
 import ProjectDeadlineModal from './components/ProjectDeadlineModal';
 import Toast from './components/Toast';
-import { Filter, Layers, ListFilter, Kanban, Sparkles, Plus } from 'lucide-react';
+import ModuleFilterDropdown from './components/ModuleFilterDropdown';
+import { Filter, Sparkles, Plus } from 'lucide-react';
 
 function DashboardContent() {
   const {
@@ -42,6 +43,8 @@ function DashboardContent() {
     setIsUserManagementModalOpen
   } = useProject();
 
+  const canEdit = currentUser && (currentUser.role === 'admin' || currentUser.role === 'developer');
+
   if (!currentUser) {
     return <LoginModal />;
   }
@@ -55,23 +58,14 @@ function DashboardContent() {
         
         {/* Filters Bar (visible on modules, features tabs) */}
         {activeTab !== 'analytics' && activeTab !== 'dev-profiles' && activeTab !== 'kanban' && activeTab !== 'vault' && activeTab !== 'gantt' && activeTab !== 'chat' && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900 border border-slate-800/80 rounded-2xl p-4 relative">
             
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
               <Filter className="w-4 h-4 text-indigo-400 shrink-0" />
               <span className="text-xs font-semibold text-slate-300">Filter By:</span>
 
-              {/* Module Filter */}
-              <select
-                value={activeModuleFilter}
-                onChange={(e) => setActiveModuleFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 font-medium"
-              >
-                <option value="All">All Modules ({moduleList.length})</option>
-                {moduleList.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+              {/* Module Filter — custom editable dropdown */}
+              <ModuleFilterDropdown />
 
               {/* Priority Filter */}
               <select
@@ -87,8 +81,30 @@ function DashboardContent() {
               </select>
             </div>
 
-            <div className="text-xs text-slate-400 font-mono self-end sm:self-center">
-              Showing <span className="text-indigo-400 font-bold">{filteredFeatures.length}</span> of {features.length} features
+            <div className="flex items-center gap-3 self-end sm:self-center">
+              <div className="text-xs text-slate-400 font-mono">
+                Showing <span className="text-indigo-400 font-bold">{filteredFeatures.length}</span> of {features.length} features
+              </div>
+
+              {/* Quick-add buttons visible to developer + admin */}
+              {canEdit && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsImporterOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                    AI Import
+                  </button>
+                  <button
+                    onClick={() => setIsManualModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Feature
+                  </button>
+                </div>
+              )}
             </div>
 
           </div>
@@ -97,6 +113,7 @@ function DashboardContent() {
         {/* Tab 1: Module Overview */}
         {activeTab === 'modules' && (
           <div className="space-y-6">
+            {/* Module cards */}
             {moduleList
               .filter(m => activeModuleFilter === 'All' || activeModuleFilter === m)
               .map((moduleName) => (
@@ -115,10 +132,12 @@ function DashboardContent() {
             {filteredFeatures.length === 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
                 <p className="text-slate-400 text-sm">No features found matching the active criteria.</p>
-                <div className="flex justify-center gap-3 pt-2">
-                  <button onClick={() => setIsImporterOpen(true)} className="px-4 py-2 rounded-xl bg-indigo-600 text-xs font-semibold">🤖 Import via AI</button>
-                  <button onClick={() => setIsManualModalOpen(true)} className="px-4 py-2 rounded-xl bg-slate-800 text-xs font-semibold">Add Manually</button>
-                </div>
+                {canEdit && (
+                  <div className="flex justify-center gap-3 pt-2">
+                    <button onClick={() => setIsImporterOpen(true)} className="px-4 py-2 rounded-xl bg-indigo-600 text-xs font-semibold">🤖 Import via AI</button>
+                    <button onClick={() => setIsManualModalOpen(true)} className="px-4 py-2 rounded-xl bg-slate-800 text-xs font-semibold">Add Manually</button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
