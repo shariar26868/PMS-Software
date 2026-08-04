@@ -25,7 +25,7 @@ const featureSchema = new mongoose.Schema(
     module: { type: String, required: true },
     priority: { type: String, enum: ['Critical', 'High', 'Medium', 'Low'], default: 'Medium' },
     complexity: { type: String, default: 'Medium (8h)' },
-    status: { type: String, enum: ['Backlog', 'To Do', 'In Progress', 'In Review', 'Completed'], default: 'To Do' },
+    status: { type: String, enum: ['Backlog', 'To Do', 'In Progress', 'In Review', 'Completed', 'Done'], default: 'To Do' },
     developerId: { type: String, default: '' },
     subtasks: [subtaskSchema],
     comments: [commentSchema],

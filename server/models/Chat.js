@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const chatMessageSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, unique: true },
-    senderId: { type: String, required: true },
+    senderId: { type: String, default: '' },
     text: { type: String, required: true },
     timestamp: { type: String, required: true },
     channelId: { type: String, default: '' },

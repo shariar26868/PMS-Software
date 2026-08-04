@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useProject } from '../context/ProjectContext';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, Users, Sparkles, Volume2, Shield, StopCircle, MonitorUp, UserCheck } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, Users, Volume2, MonitorUp, Camera } from 'lucide-react';
 
 export default function TeamCallModal() {
   const { activeCall, leaveChannelCall, currentUser, activeProject } = useProject();
@@ -9,40 +9,122 @@ export default function TeamCallModal() {
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenShareStream, setScreenShareStream] = useState(null);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [isSimulatedStream, setIsSimulatedStream] = useState(false);
 
   const localVideoRef = useRef(null);
   const screenVideoRef = useRef(null);
 
+  // Helper to create synthetic video stream if physical camera is blocked/unavailable
+  const createSyntheticAvatarStream = (name) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    let frame = 0;
+
+    const animate = () => {
+      frame++;
+      // Background gradient pulse
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      const shift = Math.sin(frame * 0.05) * 40;
+      grad.addColorStop(0, `hsl(${260 + shift}, 70%, 15%)`);
+      grad.addColorStop(1, `hsl(${300 + shift}, 80%, 25%)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Outer glowing circle
+      const radius = 60 + Math.sin(frame * 0.08) * 5;
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(168, 85, 247, 0.3)';
+      ctx.fill();
+
+      // Inner avatar circle
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2);
+      ctx.fillStyle = '#9333ea';
+      ctx.fill();
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Avatar text initials
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const initials = (name || 'Dev').split(' ').map(n => n[0]).join('').toUpperCase();
+      ctx.fillText(initials, canvas.width / 2, canvas.height / 2);
+
+      // Overlay watermark badge
+      ctx.font = '12px sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.fillText('📷 Virtual Camera Active', canvas.width / 2, canvas.height - 24);
+
+      requestAnimationFrame(animate);
+    };
+    animate();
+
+    return canvas.captureStream(30);
+  };
+
   // Camera stream handler
   useEffect(() => {
-    let cameraStream = null;
+    let activeStream = null;
+    let isCancelled = false;
 
-    if (activeCall && activeCall.type === 'video' && !isCameraOff) {
-      navigator.mediaDevices?.getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-          cameraStream = stream;
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream;
+    async function initCamera() {
+      if (activeCall && activeCall.type === 'video' && !isCameraOff) {
+        try {
+          // Try full video + audio
+          activeStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true });
+          setIsSimulatedStream(false);
+        } catch (err1) {
+          try {
+            // Try video only if audio permission failed
+            activeStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            setIsSimulatedStream(false);
+          } catch (err2) {
+            console.warn('Physical camera unavailable or permission denied. Using Virtual Camera fallback:', err2);
+            activeStream = createSyntheticAvatarStream(currentUser?.name || 'You');
+            setIsSimulatedStream(true);
           }
-        })
-        .catch((err) => {
-          console.warn('Camera stream simulation active:', err);
-        });
+        }
+
+        if (!isCancelled) {
+          setCameraStream(activeStream);
+        } else if (activeStream) {
+          activeStream.getTracks().forEach(track => track.stop());
+        }
+      } else {
+        setCameraStream(null);
+      }
     }
 
+    initCamera();
+
     return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
+      isCancelled = true;
+      if (activeStream) {
+        activeStream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [activeCall, isCameraOff]);
+  }, [activeCall, isCameraOff, currentUser?.name]);
 
-  // Screen Share stream handler
+  // Bind local camera stream to local video element
+  useEffect(() => {
+    if (localVideoRef.current && cameraStream && !isCameraOff) {
+      localVideoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream, isCameraOff, isScreenSharing]);
+
+  // Bind screen share stream to screen video element
   useEffect(() => {
     if (screenVideoRef.current && screenShareStream) {
       screenVideoRef.current.srcObject = screenShareStream;
     }
-  }, [screenShareStream]);
+  }, [screenShareStream, isScreenSharing]);
 
   if (!activeCall) return null;
 
@@ -114,13 +196,19 @@ export default function TeamCallModal() {
                 {activeCall.isDirect ? (
                   <>Talking with <strong className="text-purple-300 font-bold">{activeCall.targetUser.name}</strong></>
                 ) : (
-                  <>Channel: <span className="text-indigo-400 font-mono font-bold">#{activeCall.channel}</span> | Project: <strong className="text-slate-200">{activeProject.name}</strong></>
+                  <>Channel: <span className="text-indigo-400 font-mono font-bold">#{activeCall.channel}</span> | Project: <strong className="text-slate-200">{activeProject?.name || 'PMS System'}</strong></>
                 )}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {isSimulatedStream && activeCall.type === 'video' && !isCameraOff && (
+              <span className="px-3 py-1 rounded-xl bg-purple-600/20 text-purple-300 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-purple-400" />
+                <span>Virtual Camera Stream</span>
+              </span>
+            )}
             {isScreenSharing && (
               <span className="px-3 py-1 rounded-xl bg-indigo-600/20 text-indigo-300 border border-indigo-500/40 text-xs font-bold flex items-center gap-1.5 animate-pulse">
                 <MonitorUp className="w-4 h-4 text-indigo-400" />
@@ -134,7 +222,7 @@ export default function TeamCallModal() {
           </div>
         </div>
 
-        {/* Main Stage: If Screen Sharing is Active */}
+        {/* Main Stage: Screen Share Active vs Participant Grid */}
         {isScreenSharing ? (
           <div className="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden min-h-[360px]">
             
@@ -142,7 +230,10 @@ export default function TeamCallModal() {
             <div className="flex-1 bg-slate-950 rounded-2xl border border-indigo-500/50 relative overflow-hidden flex items-center justify-center p-2 shadow-2xl">
               {screenShareStream ? (
                 <video
-                  ref={screenVideoRef}
+                  ref={(node) => {
+                    screenVideoRef.current = node;
+                    if (node && screenShareStream) node.srcObject = screenShareStream;
+                  }}
                   autoPlay
                   playsInline
                   className="w-full h-full object-contain rounded-xl"
@@ -150,7 +241,7 @@ export default function TeamCallModal() {
               ) : (
                 <div className="text-center space-y-2 p-8">
                   <MonitorUp className="w-12 h-12 text-indigo-400 mx-auto animate-bounce" />
-                  <p className="text-sm font-bold text-slate-200">Screen Share Stream Active</p>
+                  <p className="text-sm font-bold text-slate-200">Screen Share Active</p>
                   <p className="text-xs text-slate-400">Sharing display window with team members</p>
                 </div>
               )}
@@ -162,12 +253,32 @@ export default function TeamCallModal() {
             </div>
 
             {/* Sidebar Participants List while Screen Sharing */}
-            <div className="w-full md:w-48 space-y-2 overflow-y-auto shrink-0">
+            <div className="w-full md:w-56 space-y-2 overflow-y-auto shrink-0 flex flex-col">
+              
+              {/* Floating Camera Picture-In-Picture for Local User during Screen Share */}
+              {activeCall.type === 'video' && !isCameraOff && (
+                <div className="relative rounded-2xl border border-purple-500/50 overflow-hidden aspect-video bg-slate-950 shadow-lg mb-2">
+                  <video
+                    ref={(node) => {
+                      localVideoRef.current = node;
+                      if (node && cameraStream) node.srcObject = cameraStream;
+                    }}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-2 left-2 bg-slate-950/80 px-2 py-0.5 rounded text-[10px] font-bold text-purple-300 border border-purple-500/30">
+                    You (Camera)
+                  </div>
+                </div>
+              )}
+
               {participants.map((p, idx) => (
                 <div key={idx} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
                   <img src={p.avatar} alt={p.name} className="w-7 h-7 rounded-full object-cover" />
                   <div className="truncate">
-                    <span className="text-xs font-bold text-slate-200 block truncate">{p.name.split(' ')[0]}</span>
+                    <span className="text-xs font-bold text-slate-200 block truncate">{p.name}</span>
                     <span className="text-[9px] text-slate-400 block">{p.role}</span>
                   </div>
                 </div>
@@ -188,7 +299,10 @@ export default function TeamCallModal() {
                 {/* If Local User & Video On */}
                 {p.isLocal && activeCall.type === 'video' && !isCameraOff ? (
                   <video
-                    ref={localVideoRef}
+                    ref={(node) => {
+                      localVideoRef.current = node;
+                      if (node && cameraStream) node.srcObject = cameraStream;
+                    }}
                     autoPlay
                     playsInline
                     muted
@@ -270,6 +384,9 @@ export default function TeamCallModal() {
             onClick={() => {
               if (screenShareStream) {
                 screenShareStream.getTracks().forEach(t => t.stop());
+              }
+              if (cameraStream) {
+                cameraStream.getTracks().forEach(t => t.stop());
               }
               leaveChannelCall();
             }}

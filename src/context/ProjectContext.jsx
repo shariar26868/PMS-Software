@@ -213,14 +213,25 @@ export function ProjectProvider({ children }) {
     showToast('Logged out successfully.', 'info');
   };
 
-  const createUserAccount = (userObj) => {
+  const createUserAccount = async (userObj) => {
     const newUser = {
       id: `usr-${Date.now()}`,
+      password: userObj.password || 'password123',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
       ...userObj
     };
     setUsers(prev => [...prev, newUser]);
     showToast(`Created developer account: User ID "${newUser.username}"!`, 'success');
+
+    try {
+      await fetch('http://127.0.0.1:5000/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      });
+    } catch (err) {
+      console.log('MongoDB server offline, saved locally.');
+    }
   };
 
   const updateUserAccount = (userId, updatedFields) => {
@@ -229,6 +240,12 @@ export function ProjectProvider({ children }) {
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
     }
     showToast('User credentials updated successfully.', 'success');
+
+    fetch(`http://127.0.0.1:5000/api/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedFields)
+    }).catch(() => null);
   };
 
   const updateUserProfile = async (userId, profileData) => {
@@ -433,6 +450,12 @@ export function ProjectProvider({ children }) {
     };
 
     setChatMessages(prev => [...prev, newMsg]);
+
+    fetch('http://127.0.0.1:5000/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMsg)
+    }).catch(() => null);
   };
 
   const injectSystemChatNotification = (text) => {
@@ -712,6 +735,12 @@ export function ProjectProvider({ children }) {
     setProjects(prev => [...prev, newProj]);
     setActiveProjectId(newProjId);
     showToast(`Created and switched to project "${name}"!`, 'success');
+
+    fetch('http://127.0.0.1:5000/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newProj)
+    }).catch(() => null);
   };
 
   // Action: AI Document Analysis
@@ -764,6 +793,14 @@ export function ProjectProvider({ children }) {
     setPendingAiFeatures([]);
     showToast(`Added ${formattedFeatures.length} AI-approved features!`, 'success');
     injectSystemChatNotification(`🤖 AI Imported ${formattedFeatures.length} new features into ${activeProject.name}`);
+
+    formattedFeatures.forEach(feat => {
+      fetch('http://127.0.0.1:5000/api/features', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feat)
+      }).catch(() => null);
+    });
   };
 
   // Action: Add Manual Feature
@@ -802,6 +839,12 @@ export function ProjectProvider({ children }) {
     setIsManualModalOpen(false);
     showToast(`Feature "${newFeature.name}" created manually!`, 'success');
     injectSystemChatNotification(`➕ ${currentUser?.name || 'Admin'} created new feature: "${newFeature.name}" assigned to ${dev.name}`);
+
+    fetch('http://127.0.0.1:5000/api/features', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newFeature)
+    }).catch(() => null);
   };
 
   // Action: Move Feature Status
@@ -817,6 +860,12 @@ export function ProjectProvider({ children }) {
       return f;
     }));
     showToast(`Moved feature to "${newStatus}" status`, 'info');
+
+    fetch(`http://127.0.0.1:5000/api/features/${featureId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    }).catch(() => null);
   };
 
   // Action: Update Feature
@@ -826,6 +875,12 @@ export function ProjectProvider({ children }) {
       setSelectedFeatureDetail(prev => ({ ...prev, ...updatedFields }));
     }
     showToast('Feature updated.');
+
+    fetch(`http://127.0.0.1:5000/api/features/${featureId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedFields)
+    }).catch(() => null);
   };
 
   // Action: Delete Feature
@@ -835,6 +890,10 @@ export function ProjectProvider({ children }) {
       setSelectedFeatureDetail(null);
     }
     showToast('Feature deleted.', 'info');
+
+    fetch(`http://127.0.0.1:5000/api/features/${featureId}`, {
+      method: 'DELETE'
+    }).catch(() => null);
   };
 
   // Action: Update Module Description
