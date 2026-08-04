@@ -7,6 +7,19 @@ import { analyzeRequirementDocument, generateSubtasksForFeature } from '../servi
 const ProjectContext = createContext();
 
 export function ProjectProvider({ children }) {
+  // Database Connection Status State
+  const [dbStatus, setDbStatus] = useState('connecting'); // 'connected' | 'disconnected' | 'syncing'
+
+  // Dynamic API Base URL resolution
+  const getApiUrl = () => {
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+    const hostname = typeof window !== 'undefined' ? (window.location.hostname || 'localhost') : 'localhost';
+    const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+    return `${protocol}//${hostname}:5000/api`;
+  };
+
+  const API_BASE = getApiUrl();
+
   // Users List State
   const [users, setUsers] = useState(() => {
     const saved = localStorage.getItem('pm_system_users');
@@ -125,38 +138,112 @@ export function ProjectProvider({ children }) {
   };
 
   // Fetch live state from MongoDB backend API
-  useEffect(() => {
-    async function loadFromMongoDB() {
-      try {
-        const [usersRes, projectsRes, featuresRes, chatRes] = await Promise.all([
-          fetch('http://127.0.0.1:5000/api/users').catch(() => null),
-          fetch('http://127.0.0.1:5000/api/projects').catch(() => null),
-          fetch('http://127.0.0.1:5000/api/features').catch(() => null),
-          fetch('http://127.0.0.1:5000/api/chat').catch(() => null)
-        ]);
+  const loadFromMongoDB = async () => {
+    try {
+      const [usersRes, projectsRes, featuresRes, chatRes] = await Promise.all([
+        fetch(`${API_BASE}/users`).catch(() => null),
+        fetch(`${API_BASE}/projects`).catch(() => null),
+        fetch(`${API_BASE}/features`).catch(() => null),
+        fetch(`${API_BASE}/chat`).catch(() => null)
+      ]);
 
-        if (usersRes && usersRes.ok) {
-          const uData = await usersRes.json();
-          if (Array.isArray(uData) && uData.length > 0) setUsers(uData);
-        }
-        if (projectsRes && projectsRes.ok) {
-          const pData = await projectsRes.json();
-          if (Array.isArray(pData) && pData.length > 0) setProjects(pData);
-        }
-        if (featuresRes && featuresRes.ok) {
-          const fData = await featuresRes.json();
-          if (Array.isArray(fData) && fData.length > 0) setFeatures(fData);
-        }
-        if (chatRes && chatRes.ok) {
-          const cData = await chatRes.json();
-          if (Array.isArray(cData) && cData.length > 0) setChatMessages(cData);
-        }
-      } catch (err) {
-        console.log('MongoDB server offline, using local storage fallback.');
+      let isConnected = false;
+
+      if (usersRes && usersRes.ok) {
+        const uData = await usersRes.json();
+        if (Array.isArray(uData) && uData.length > 0) setUsers(uData);
+        isConnected = true;
       }
+      if (projectsRes && projectsRes.ok) {
+        const pData = await projectsRes.json();
+        if (Array.isArray(pData) && pData.length > 0) setProjects(pData);
+        isConnected = true;
+      }
+      if (featuresRes && featuresRes.ok) {
+        const fData = await featuresRes.json();
+        if (Array.isArray(fData) && fData.length > 0) setFeatures(fData);
+        isConnected = true;
+      }
+      if (chatRes && chatRes.ok) {
+        const cData = await chatRes.json();
+        if (Array.isArray(cData) && cData.length > 0) setChatMessages(cData);
+        isConnected = true;
+      }
+
+      setDbStatus(isConnected ? 'connected' : 'disconnected');
+    } catch (err) {
+      console.log('MongoDB server offline, using local storage fallback.');
+      setDbStatus('disconnected');
     }
+  };
+
+  useEffect(() => {
     loadFromMongoDB();
   }, []);
+
+  // Sync locally stored projects/users/features to MongoDB
+  const syncLocalStorageToDatabase = async () => {
+    setDbStatus('syncing');
+    showToast('Syncing local storage data to MongoDB database...', 'info');
+    try {
+      const [uRes, pRes, fRes] = await Promise.all([
+        fetch(`${API_BASE}/users`).catch(() => null),
+        fetch(`${API_BASE}/projects`).catch(() => null),
+        fetch(`${API_BASE}/features`).catch(() => null)
+      ]);
+
+      const dbUsers = (uRes && uRes.ok) ? await uRes.json() : [];
+      const dbProjects = (pRes && pRes.ok) ? await pRes.json() : [];
+      const dbFeatures = (fRes && fRes.ok) ? await fRes.json() : [];
+
+      const dbUserIds = new Set(dbUsers.map(u => u.id || u.username));
+      const dbProjectIds = new Set(dbProjects.map(p => p.id));
+      const dbFeatureIds = new Set(dbFeatures.map(f => f.id));
+
+      let syncedCount = 0;
+
+      for (const p of projects) {
+        if (!dbProjectIds.has(p.id)) {
+          await fetch(`${API_BASE}/projects`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(p)
+          }).catch(() => null);
+          syncedCount++;
+        }
+      }
+
+      for (const u of users) {
+        if (!dbUserIds.has(u.id) && !dbUserIds.has(u.username)) {
+          await fetch(`${API_BASE}/users`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(u)
+          }).catch(() => null);
+          syncedCount++;
+        }
+      }
+
+      for (const f of features) {
+        if (!dbFeatureIds.has(f.id)) {
+          await fetch(`${API_BASE}/features`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(f)
+          }).catch(() => null);
+          syncedCount++;
+        }
+      }
+
+      await loadFromMongoDB();
+      setDbStatus('connected');
+      showToast(`Database Sync Complete! ${syncedCount} item(s) pushed to MongoDB.`, 'success');
+    } catch (err) {
+      console.error('Sync error:', err);
+      setDbStatus('disconnected');
+      showToast('Database Sync failed. Check server connection.', 'error');
+    }
+  };
 
   // Sync state to localStorage
   useEffect(() => {
@@ -224,7 +311,7 @@ export function ProjectProvider({ children }) {
     showToast(`Created developer account: User ID "${newUser.username}"!`, 'success');
 
     try {
-      await fetch('http://127.0.0.1:5000/api/users', {
+      await fetch(`${API_BASE}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
@@ -241,7 +328,7 @@ export function ProjectProvider({ children }) {
     }
     showToast('User credentials updated successfully.', 'success');
 
-    fetch(`http://127.0.0.1:5000/api/users/${userId}`, {
+    fetch(`${API_BASE}/users/${userId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedFields)
@@ -252,7 +339,7 @@ export function ProjectProvider({ children }) {
     updateUserAccount(userId, profileData);
 
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/users/${userId}`, {
+      const res = await fetch(`${API_BASE}/users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profileData)
@@ -451,7 +538,7 @@ export function ProjectProvider({ children }) {
 
     setChatMessages(prev => [...prev, newMsg]);
 
-    fetch('http://127.0.0.1:5000/api/chat', {
+    fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newMsg)
@@ -645,7 +732,7 @@ export function ProjectProvider({ children }) {
     }));
 
     // Sync to MongoDB backend API
-    fetch(`http://127.0.0.1:5000/api/projects/${projectId}`, {
+    fetch(`${API_BASE}/projects/${projectId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startDate, targetCompletionDate })
@@ -736,7 +823,7 @@ export function ProjectProvider({ children }) {
     setActiveProjectId(newProjId);
     showToast(`Created and switched to project "${name}"!`, 'success');
 
-    fetch('http://127.0.0.1:5000/api/projects', {
+    fetch(`${API_BASE}/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newProj)
@@ -795,7 +882,7 @@ export function ProjectProvider({ children }) {
     injectSystemChatNotification(`🤖 AI Imported ${formattedFeatures.length} new features into ${activeProject.name}`);
 
     formattedFeatures.forEach(feat => {
-      fetch('http://127.0.0.1:5000/api/features', {
+      fetch(`${API_BASE}/features`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(feat)
@@ -840,7 +927,7 @@ export function ProjectProvider({ children }) {
     showToast(`Feature "${newFeature.name}" created manually!`, 'success');
     injectSystemChatNotification(`➕ ${currentUser?.name || 'Admin'} created new feature: "${newFeature.name}" assigned to ${dev.name}`);
 
-    fetch('http://127.0.0.1:5000/api/features', {
+    fetch(`${API_BASE}/features`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newFeature)
@@ -861,7 +948,7 @@ export function ProjectProvider({ children }) {
     }));
     showToast(`Moved feature to "${newStatus}" status`, 'info');
 
-    fetch(`http://127.0.0.1:5000/api/features/${featureId}`, {
+    fetch(`${API_BASE}/features/${featureId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus })
@@ -876,7 +963,7 @@ export function ProjectProvider({ children }) {
     }
     showToast('Feature updated.');
 
-    fetch(`http://127.0.0.1:5000/api/features/${featureId}`, {
+    fetch(`${API_BASE}/features/${featureId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedFields)
@@ -891,7 +978,7 @@ export function ProjectProvider({ children }) {
     }
     showToast('Feature deleted.', 'info');
 
-    fetch(`http://127.0.0.1:5000/api/features/${featureId}`, {
+    fetch(`${API_BASE}/features/${featureId}`, {
       method: 'DELETE'
     }).catch(() => null);
   };
@@ -1142,7 +1229,13 @@ export function ProjectProvider({ children }) {
       setActivePriorityFilter,
       activeTab,
       setActiveTab,
-      toastMessage
+      toastMessage,
+
+      // DB Status & Sync
+      dbStatus,
+      syncLocalStorageToDatabase,
+      loadFromMongoDB,
+      API_BASE
     }}>
       {children}
     </ProjectContext.Provider>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useProject } from '../context/ProjectContext';
 import ExportReportModal from './ExportReportModal';
 import MaxValidLogo from './MaxValidLogo';
-import { Sparkles, Plus, Search, RotateCcw, LayoutGrid, ListFilter, Kanban, BarChart3, FolderPlus, ChevronDown, LogOut, Users, Key, Calendar, MessageSquare, Download } from 'lucide-react';
+import { Sparkles, Plus, Search, RotateCcw, LayoutGrid, ListFilter, Kanban, BarChart3, FolderPlus, ChevronDown, LogOut, Users, Key, Calendar, MessageSquare, Download, Database, RefreshCw } from 'lucide-react';
 
 export default function Navbar() {
   const {
@@ -22,7 +22,9 @@ export default function Navbar() {
     searchQuery,
     setSearchQuery,
     activeTab,
-    setActiveTab
+    setActiveTab,
+    dbStatus,
+    syncLocalStorageToDatabase
   } = useProject();
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -116,6 +118,25 @@ export default function Navbar() {
                 </button>
               );
             })()}
+
+            {/* DB Connection Status Badge & Sync Button */}
+            <button
+              onClick={syncLocalStorageToDatabase}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all shadow-sm ${
+                dbStatus === 'connected'
+                  ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/60'
+                  : dbStatus === 'syncing'
+                  ? 'bg-amber-950/50 border-amber-500/30 text-amber-300 animate-pulse'
+                  : 'bg-rose-950/50 border-rose-500/30 text-rose-300 hover:bg-rose-900/60'
+              }`}
+              title={dbStatus === 'connected' ? 'MongoDB Database Connected. Click to Sync Local Data.' : 'Local Storage Fallback. Click to Sync Local Data to MongoDB.'}
+            >
+              <Database className={`w-3.5 h-3.5 ${dbStatus === 'connected' ? 'text-emerald-400' : 'text-rose-400'}`} />
+              <span className="hidden lg:inline">
+                {dbStatus === 'connected' ? 'MongoDB Connected' : dbStatus === 'syncing' ? 'Syncing DB...' : 'Local Storage Mode'}
+              </span>
+              <RefreshCw className={`w-3 h-3 ${dbStatus === 'syncing' ? 'animate-spin' : ''}`} />
+            </button>
           </div>
 
           {/* User Profile & Actions */}
