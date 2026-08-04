@@ -140,37 +140,52 @@ export function ProjectProvider({ children }) {
   // Fetch live state from MongoDB backend API
   const loadFromMongoDB = async () => {
     try {
-      const [usersRes, projectsRes, featuresRes, chatRes] = await Promise.all([
-        fetch(`${API_BASE}/users`).catch(() => null),
-        fetch(`${API_BASE}/projects`).catch(() => null),
-        fetch(`${API_BASE}/features`).catch(() => null),
-        fetch(`${API_BASE}/chat`).catch(() => null)
-      ]);
+      const candidateUrls = [getApiUrl(), '/api'];
+      let workingUrl = null;
+      let usersRes = null, projectsRes = null, featuresRes = null, chatRes = null;
 
-      let isConnected = false;
-
-      if (usersRes && usersRes.ok) {
-        const uData = await usersRes.json();
-        if (Array.isArray(uData) && uData.length > 0) setUsers(uData);
-        isConnected = true;
-      }
-      if (projectsRes && projectsRes.ok) {
-        const pData = await projectsRes.json();
-        if (Array.isArray(pData) && pData.length > 0) setProjects(pData);
-        isConnected = true;
-      }
-      if (featuresRes && featuresRes.ok) {
-        const fData = await featuresRes.json();
-        if (Array.isArray(fData) && fData.length > 0) setFeatures(fData);
-        isConnected = true;
-      }
-      if (chatRes && chatRes.ok) {
-        const cData = await chatRes.json();
-        if (Array.isArray(cData) && cData.length > 0) setChatMessages(cData);
-        isConnected = true;
+      for (const baseUrl of candidateUrls) {
+        try {
+          const testRes = await fetch(`${baseUrl}/users`).catch(() => null);
+          if (testRes && testRes.ok) {
+            workingUrl = baseUrl;
+            usersRes = testRes;
+            break;
+          }
+        } catch (e) {}
       }
 
-      setDbStatus(isConnected ? 'connected' : 'disconnected');
+      if (workingUrl) {
+        const [pRes, fRes, cRes] = await Promise.all([
+          fetch(`${workingUrl}/projects`).catch(() => null),
+          fetch(`${workingUrl}/features`).catch(() => null),
+          fetch(`${workingUrl}/chat`).catch(() => null)
+        ]);
+        projectsRes = pRes;
+        featuresRes = fRes;
+        chatRes = cRes;
+
+        if (usersRes && usersRes.ok) {
+          const uData = await usersRes.json();
+          if (Array.isArray(uData) && uData.length > 0) setUsers(uData);
+        }
+        if (projectsRes && projectsRes.ok) {
+          const pData = await projectsRes.json();
+          if (Array.isArray(pData) && pData.length > 0) setProjects(pData);
+        }
+        if (featuresRes && featuresRes.ok) {
+          const fData = await featuresRes.json();
+          if (Array.isArray(fData) && fData.length > 0) setFeatures(fData);
+        }
+        if (chatRes && chatRes.ok) {
+          const cData = await chatRes.json();
+          if (Array.isArray(cData) && cData.length > 0) setChatMessages(cData);
+        }
+
+        setDbStatus('connected');
+      } else {
+        setDbStatus('disconnected');
+      }
     } catch (err) {
       console.log('MongoDB server offline, using local storage fallback.');
       setDbStatus('disconnected');
