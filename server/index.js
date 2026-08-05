@@ -50,8 +50,13 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-// Database Connection & Auto Seed Logic
-async function startServer() {
+// Start Express Server immediately on Port 5000
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Express Server running on http://127.0.0.1:${PORT}`);
+});
+
+// Database Connection & Auto Seed Logic (Async)
+async function connectAndSeedDB() {
   try {
     const maskedUri = MONGO_URI.replace(/:([^@]+)@/, ':****@');
     console.log(`Connecting to MongoDB... (${maskedUri})`);
@@ -102,10 +107,6 @@ async function startServer() {
   } catch (err) {
     console.error('⚠️ MongoDB Connection Error:', err.message);
   }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Express Server running on http://127.0.0.1:${PORT}`);
-  });
 }
 
-startServer();
+connectAndSeedDB();
