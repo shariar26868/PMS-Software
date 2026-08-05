@@ -37,14 +37,22 @@ export function ProjectProvider({ children }) {
   const apiFetch = async (endpointPath, options = {}) => {
     const candidateUrls = getApiCandidateUrls();
     for (const baseUrl of candidateUrls) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       try {
         const cleanBase = baseUrl.replace(/\/+$/, '');
         const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
-        const res = await fetch(`${cleanBase}${cleanPath}`, options);
+        const res = await fetch(`${cleanBase}${cleanPath}`, {
+          ...options,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         if (res && res.ok) {
           return res;
         }
-      } catch (e) {}
+      } catch (e) {
+        clearTimeout(timeoutId);
+      }
     }
     return null;
   };
@@ -246,13 +254,17 @@ export function ProjectProvider({ children }) {
     setDbStatus('syncing');
     showToast('Syncing local storage data to MongoDB database...', 'info');
     try {
-      const [uRes, pRes, fRes] = await Promise.all([
-        apiFetch('/users'),
-        apiFetch('/projects'),
-        apiFetch('/features')
-      ]);
+      const uRes = await apiFetch('/users');
+      if (!uRes || !uRes.ok) {
+        setDbStatus('disconnected');
+        showToast('Sync Failed: Could not connect to backend server on Port 5000.', 'error');
+        return;
+      }
 
-      const dbUsers = (uRes && uRes.ok) ? await uRes.json() : [];
+      const dbUsers = await uRes.json();
+      const pRes = await apiFetch('/projects');
+      const fRes = await apiFetch('/features');
+
       const dbProjects = (pRes && pRes.ok) ? await pRes.json() : [];
       const dbFeatures = (fRes && fRes.ok) ? await fRes.json() : [];
 
