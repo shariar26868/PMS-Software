@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useProject } from '../context/ProjectContext';
 import MaxValidLogo from './MaxValidLogo';
-import { User, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { User, Lock, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function LoginModal() {
   const { currentUser, loginUser } = useProject();
@@ -9,15 +9,23 @@ export default function LoginModal() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (currentUser) return null; // Hide modal when logged in
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    const success = loginUser(username, password);
-    if (!success) {
-      setErrorMsg('Invalid Username or Password. Please try again.');
+    setIsSubmitting(true);
+    try {
+      const success = await loginUser(username, password);
+      if (!success) {
+        setErrorMsg('Invalid Username or Password. Please try again.');
+      }
+    } catch (err) {
+      setErrorMsg('Login failed. Please check connection and try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -82,10 +90,20 @@ export default function LoginModal() {
 
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:opacity-95 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all hover:scale-[1.01]"
+            disabled={isSubmitting}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:opacity-95 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all hover:scale-[1.01] disabled:opacity-50"
           >
-            <span>Log In to Workspace</span>
-            <ArrowRight className="w-4 h-4" />
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Authenticating...</span>
+              </>
+            ) : (
+              <>
+                <span>Log In to Workspace</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </form>
 

@@ -10,15 +10,44 @@ export function ProjectProvider({ children }) {
   // Database Connection Status State
   const [dbStatus, setDbStatus] = useState('connecting'); // 'connected' | 'disconnected' | 'syncing'
 
-  // Dynamic API Base URL resolution
+  // Dynamic API Base URL resolution with candidate fallbacks
+  const getApiCandidateUrls = () => {
+    const urls = [];
+    if (import.meta.env.VITE_API_URL) urls.push(import.meta.env.VITE_API_URL);
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname || 'localhost';
+      const protocol = window.location.protocol || 'http:';
+      urls.push(`${protocol}//${hostname}:5000/api`);
+      if (window.location.port !== '5000') {
+        urls.push(`${window.location.origin}/api`);
+      }
+    }
+    urls.push('/api');
+    urls.push('http://127.0.0.1:5000/api');
+    urls.push('http://localhost:5000/api');
+    return [...new Set(urls)];
+  };
+
   const getApiUrl = () => {
-    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-    const hostname = typeof window !== 'undefined' ? (window.location.hostname || 'localhost') : 'localhost';
-    const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-    return `${protocol}//${hostname}:5000/api`;
+    return getApiCandidateUrls()[0];
   };
 
   const API_BASE = getApiUrl();
+
+  const apiFetch = async (endpointPath, options = {}) => {
+    const candidateUrls = getApiCandidateUrls();
+    for (const baseUrl of candidateUrls) {
+      try {
+        const cleanBase = baseUrl.replace(/\/+$/, '');
+        const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+        const res = await fetch(`${cleanBase}${cleanPath}`, options);
+        if (res && res.ok) {
+          return res;
+        }
+      } catch (e) {}
+    }
+    return null;
+  };
 
   // Users List State
   const [users, setUsers] = useState(() => {
@@ -315,10 +344,32 @@ export function ProjectProvider({ children }) {
   }, [chatChannels]);
 
   // Auth Functions
-  const loginUser = (username, password) => {
-    const found = users.find(
-      u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
+  const loginUser = async (username, password) => {
+    const cleanUsername = username.trim().toLowerCase();
+
+    // 1. Check local users state first
+    let found = users.find(
+      u => u.username.toLowerCase() === cleanUsername && u.password === password
     );
+
+    // 2. If not found locally, fetch latest users from backend MongoDB API
+    if (!found) {
+      try {
+        const res = await apiFetch('/users');
+        if (res && res.ok) {
+          const uData = await res.json();
+          if (Array.isArray(uData) && uData.length > 0) {
+            setUsers(uData);
+            found = uData.find(
+              u => u.username.toLowerCase() === cleanUsername && u.password === password
+            );
+          }
+        }
+      } catch (err) {
+        console.error('Error checking users from API during login:', err);
+      }
+    }
+
     if (found) {
       setCurrentUser(found);
       showToast(`Welcome back, ${found.name}!`, 'success');
@@ -343,7 +394,7 @@ export function ProjectProvider({ children }) {
     showToast(`Created developer account: User ID "${newUser.username}"!`, 'success');
 
     try {
-      await fetch(`${API_BASE}/users`, {
+      await apiFetch('/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
