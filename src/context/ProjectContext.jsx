@@ -15,7 +15,12 @@ export function ProjectProvider({ children }) {
     const urls = [];
     if (import.meta.env.VITE_API_URL) urls.push(import.meta.env.VITE_API_URL);
     if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const protocol = window.location.protocol || 'http:';
       urls.push(`${window.location.origin}/api`);
+      if (hostname) {
+        urls.push(`${protocol}//${hostname}:5000/api`);
+      }
     }
     urls.push('/api');
     urls.push('http://127.0.0.1:5000/api');
