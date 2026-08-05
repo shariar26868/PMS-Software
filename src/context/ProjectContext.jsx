@@ -137,7 +137,7 @@ export function ProjectProvider({ children }) {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Fetch live state from MongoDB backend API
+  // Fetch live state from MongoDB backend API with smart merge
   const loadFromMongoDB = async () => {
     try {
       const candidateUrls = [getApiUrl(), '/api'];
@@ -165,21 +165,38 @@ export function ProjectProvider({ children }) {
         featuresRes = fRes;
         chatRes = cRes;
 
+        const mergeById = (dbItems, localItems, idField = 'id') => {
+          if (!Array.isArray(dbItems)) return localItems || [];
+          if (!Array.isArray(localItems)) return dbItems || [];
+          const map = new Map();
+          dbItems.forEach(item => {
+            if (item && item[idField]) map.set(String(item[idField]), item);
+          });
+          localItems.forEach(item => {
+            if (item && item[idField]) {
+              const key = String(item[idField]);
+              const existing = map.get(key);
+              map.set(key, existing ? { ...existing, ...item } : item);
+            }
+          });
+          return Array.from(map.values());
+        };
+
         if (usersRes && usersRes.ok) {
           const uData = await usersRes.json();
-          if (Array.isArray(uData) && uData.length > 0) setUsers(uData);
+          if (Array.isArray(uData)) setUsers(prev => mergeById(uData, prev, 'id'));
         }
         if (projectsRes && projectsRes.ok) {
           const pData = await projectsRes.json();
-          if (Array.isArray(pData) && pData.length > 0) setProjects(pData);
+          if (Array.isArray(pData)) setProjects(prev => mergeById(pData, prev, 'id'));
         }
         if (featuresRes && featuresRes.ok) {
           const fData = await featuresRes.json();
-          if (Array.isArray(fData) && fData.length > 0) setFeatures(fData);
+          if (Array.isArray(fData)) setFeatures(prev => mergeById(fData, prev, 'id'));
         }
         if (chatRes && chatRes.ok) {
           const cData = await chatRes.json();
-          if (Array.isArray(cData) && cData.length > 0) setChatMessages(cData);
+          if (Array.isArray(cData)) setChatMessages(prev => mergeById(cData, prev, 'id'));
         }
 
         setDbStatus('connected');
@@ -482,6 +499,10 @@ export function ProjectProvider({ children }) {
   const deleteUserAccount = (userId) => {
     setUsers(prev => prev.filter(u => u.id !== userId));
     showToast('User account removed.', 'info');
+
+    fetch(`${API_BASE}/users/${userId}`, {
+      method: 'DELETE'
+    }).catch(() => null);
   };
 
   // Chat & Calls Functions
@@ -520,6 +541,12 @@ export function ProjectProvider({ children }) {
     };
 
     setDirectMessages(prev => [...prev, newDM]);
+
+    fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newDM)
+    }).catch(() => null);
   };
 
   const createChatChannel = ({ name, description }) => {
@@ -951,23 +978,27 @@ export function ProjectProvider({ children }) {
 
   // Action: Move Feature Status
   const moveFeatureStatus = (featureId, newStatus) => {
+    let updatedFeatObj = null;
     setFeatures(prev => prev.map(f => {
       if (f.id === featureId) {
         let updatedSubtasks = f.subtasks || [];
         if (newStatus === 'Done' && updatedSubtasks.length > 0) {
           updatedSubtasks = updatedSubtasks.map(s => ({ ...s, completed: true }));
         }
-        return { ...f, status: newStatus, subtasks: updatedSubtasks };
+        updatedFeatObj = { ...f, status: newStatus, subtasks: updatedSubtasks };
+        return updatedFeatObj;
       }
       return f;
     }));
     showToast(`Moved feature to "${newStatus}" status`, 'info');
 
-    fetch(`${API_BASE}/features/${featureId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
-    }).catch(() => null);
+    if (updatedFeatObj) {
+      fetch(`${API_BASE}/features/${featureId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedFeatObj)
+      }).catch(() => null);
+    }
   };
 
   // Action: Update Feature
@@ -1075,6 +1106,7 @@ export function ProjectProvider({ children }) {
 
   // Action: Toggle Subtask
   const toggleSubtask = (featureId, subtaskId) => {
+    let updatedFeatObj = null;
     setFeatures(prev => prev.map(f => {
       if (f.id === featureId) {
         const updatedSubtasks = (f.subtasks || []).map(st => 
@@ -1087,6 +1119,7 @@ export function ProjectProvider({ children }) {
         else if (done > 0 && f.status === 'To Do') newStatus = 'In Progress';
 
         const updatedFeat = { ...f, subtasks: updatedSubtasks, status: newStatus };
+        updatedFeatObj = updatedFeat;
         if (selectedFeatureDetail && selectedFeatureDetail.id === featureId) {
           setSelectedFeatureDetail(updatedFeat);
         }
@@ -1094,10 +1127,19 @@ export function ProjectProvider({ children }) {
       }
       return f;
     }));
+
+    if (updatedFeatObj) {
+      fetch(`${API_BASE}/features/${featureId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedFeatObj)
+      }).catch(() => null);
+    }
   };
 
   // Action: Add Subtasks to Feature
   const addSubtasksToFeature = (featureId, newTitlesArray) => {
+    let updatedFeatObj = null;
     setFeatures(prev => prev.map(f => {
       if (f.id === featureId) {
         const existingTitles = new Set((f.subtasks || []).map(s => s.title.toLowerCase()));
@@ -1111,6 +1153,7 @@ export function ProjectProvider({ children }) {
 
         const updatedSubtasks = [...(f.subtasks || []), ...additions];
         const updatedFeat = { ...f, subtasks: updatedSubtasks };
+        updatedFeatObj = updatedFeat;
         if (selectedFeatureDetail && selectedFeatureDetail.id === featureId) {
           setSelectedFeatureDetail(updatedFeat);
         }
@@ -1119,6 +1162,14 @@ export function ProjectProvider({ children }) {
       return f;
     }));
     showToast(`Added subtasks to feature!`, 'success');
+
+    if (updatedFeatObj) {
+      fetch(`${API_BASE}/features/${featureId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedFeatObj)
+      }).catch(() => null);
+    }
   };
 
   // Filtered features list

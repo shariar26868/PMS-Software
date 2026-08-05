@@ -24,7 +24,8 @@ router.get('/users', async (req, res) => {
 router.post('/users', async (req, res) => {
   try {
     const newUser = req.body;
-    const created = await User.create(newUser);
+    const filter = newUser.id ? { id: newUser.id } : { username: newUser.username };
+    const created = await User.findOneAndUpdate(filter, newUser, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.status(201).json(created);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -33,7 +34,7 @@ router.post('/users', async (req, res) => {
 
 router.put('/users/:id', async (req, res) => {
   try {
-    const updated = await User.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+    const updated = await User.findOneAndUpdate({ id: req.params.id }, req.body, { new: true, upsert: true });
     res.json(updated);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -61,7 +62,9 @@ router.get('/projects', async (req, res) => {
 
 router.post('/projects', async (req, res) => {
   try {
-    const created = await Project.create(req.body);
+    const project = req.body;
+    const filter = { id: project.id };
+    const created = await Project.findOneAndUpdate(filter, project, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.status(201).json(created);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -70,8 +73,17 @@ router.post('/projects', async (req, res) => {
 
 router.put('/projects/:id', async (req, res) => {
   try {
-    const updated = await Project.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+    const updated = await Project.findOneAndUpdate({ id: req.params.id }, req.body, { new: true, upsert: true });
     res.json(updated);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete('/projects/:id', async (req, res) => {
+  try {
+    await Project.deleteOne({ id: req.params.id });
+    res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -91,7 +103,9 @@ router.get('/features', async (req, res) => {
 
 router.post('/features', async (req, res) => {
   try {
-    const created = await Feature.create(req.body);
+    const feature = req.body;
+    const filter = { id: feature.id };
+    const created = await Feature.findOneAndUpdate(filter, feature, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.status(201).json(created);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -100,7 +114,7 @@ router.post('/features', async (req, res) => {
 
 router.put('/features/:id', async (req, res) => {
   try {
-    const updated = await Feature.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+    const updated = await Feature.findOneAndUpdate({ id: req.params.id }, req.body, { new: true, upsert: true });
     res.json(updated);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -128,7 +142,9 @@ router.get('/chat', async (req, res) => {
 
 router.post('/chat', async (req, res) => {
   try {
-    const created = await ChatMessage.create(req.body);
+    const chatMsg = req.body;
+    const filter = { id: chatMsg.id };
+    const created = await ChatMessage.findOneAndUpdate(filter, chatMsg, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.status(201).json(created);
   } catch (err) {
     res.status(400).json({ error: err.message });
