@@ -24,7 +24,10 @@ router.get('/users', async (req, res) => {
 router.post('/users', async (req, res) => {
   try {
     const newUser = req.body;
-    const filter = newUser.id ? { id: newUser.id } : { username: newUser.username };
+    if (!newUser.id) {
+      newUser.id = newUser.username ? `usr-${newUser.username}` : `usr-${Date.now()}`;
+    }
+    const filter = { $or: [{ id: newUser.id }, { username: newUser.username }] };
     const created = await User.findOneAndUpdate(filter, newUser, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.status(201).json(created);
   } catch (err) {

@@ -15,12 +15,7 @@ export function ProjectProvider({ children }) {
     const urls = [];
     if (import.meta.env.VITE_API_URL) urls.push(import.meta.env.VITE_API_URL);
     if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname || 'localhost';
-      const protocol = window.location.protocol || 'http:';
-      urls.push(`${protocol}//${hostname}:5000/api`);
-      if (window.location.port !== '5000') {
-        urls.push(`${window.location.origin}/api`);
-      }
+      urls.push(`${window.location.origin}/api`);
     }
     urls.push('/api');
     urls.push('http://127.0.0.1:5000/api');
@@ -169,41 +164,52 @@ export function ProjectProvider({ children }) {
   // Fetch live state from MongoDB backend API with smart merge
   const loadFromMongoDB = async () => {
     try {
-      const candidateUrls = [getApiUrl(), '/api'];
-      let workingUrl = null;
-      let usersRes = null, projectsRes = null, featuresRes = null, chatRes = null;
-
-      for (const baseUrl of candidateUrls) {
-        try {
-          const testRes = await fetch(`${baseUrl}/users`).catch(() => null);
-          if (testRes && testRes.ok) {
-            workingUrl = baseUrl;
-            usersRes = testRes;
-            break;
-          }
-        } catch (e) {}
-      }
-
-      if (workingUrl) {
+      const usersRes = await apiFetch('/users');
+      if (usersRes && usersRes.ok) {
+        const dbUsers = await usersRes.json();
         const [pRes, fRes, cRes] = await Promise.all([
-          fetch(`${workingUrl}/projects`).catch(() => null),
-          fetch(`${workingUrl}/features`).catch(() => null),
-          fetch(`${workingUrl}/chat`).catch(() => null)
+          apiFetch('/projects'),
+          apiFetch('/features'),
+          apiFetch('/chat')
         ]);
-        projectsRes = pRes;
-        featuresRes = fRes;
-        chatRes = cRes;
+
+        const dbProjects = (pRes && pRes.ok) ? await pRes.json() : [];
+        const dbFeatures = (fRes && fRes.ok) ? await fRes.json() : [];
+        const dbChat = (cRes && cRes.ok) ? await cRes.json() : [];
+
+        // Auto-sync any local users that exist in localStorage but not in MongoDB
+        const dbUserKeys = new Set(dbUsers.map(u => String(u.id || u.username)));
+        const savedLocalUsersStr = localStorage.getItem('pm_system_users');
+        if (savedLocalUsersStr) {
+          try {
+            const localUsers = JSON.parse(savedLocalUsersStr);
+            for (const lu of localUsers) {
+              const luKey = String(lu.id || lu.username);
+              if (luKey && !dbUserKeys.has(luKey)) {
+                await apiFetch('/users', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(lu)
+                });
+                dbUsers.push(lu);
+                dbUserKeys.add(luKey);
+              }
+            }
+          } catch (e) {}
+        }
 
         const mergeById = (dbItems, localItems, idField = 'id') => {
           if (!Array.isArray(dbItems)) return localItems || [];
           if (!Array.isArray(localItems)) return dbItems || [];
           const map = new Map();
-          dbItems.forEach(item => {
-            if (item && item[idField]) map.set(String(item[idField]), item);
-          });
           localItems.forEach(item => {
-            if (item && item[idField]) {
-              const key = String(item[idField]);
+            if (item && (item[idField] || item.username)) {
+              map.set(String(item[idField] || item.username), item);
+            }
+          });
+          dbItems.forEach(item => {
+            if (item && (item[idField] || item.username)) {
+              const key = String(item[idField] || item.username);
               const existing = map.get(key);
               map.set(key, existing ? { ...existing, ...item } : item);
             }
@@ -211,22 +217,10 @@ export function ProjectProvider({ children }) {
           return Array.from(map.values());
         };
 
-        if (usersRes && usersRes.ok) {
-          const uData = await usersRes.json();
-          if (Array.isArray(uData)) setUsers(prev => mergeById(uData, prev, 'id'));
-        }
-        if (projectsRes && projectsRes.ok) {
-          const pData = await projectsRes.json();
-          if (Array.isArray(pData)) setProjects(prev => mergeById(pData, prev, 'id'));
-        }
-        if (featuresRes && featuresRes.ok) {
-          const fData = await featuresRes.json();
-          if (Array.isArray(fData)) setFeatures(prev => mergeById(fData, prev, 'id'));
-        }
-        if (chatRes && chatRes.ok) {
-          const cData = await chatRes.json();
-          if (Array.isArray(cData)) setChatMessages(prev => mergeById(cData, prev, 'id'));
-        }
+        if (Array.isArray(dbUsers)) setUsers(prev => mergeById(dbUsers, prev, 'id'));
+        if (Array.isArray(dbProjects)) setProjects(prev => mergeById(dbProjects, prev, 'id'));
+        if (Array.isArray(dbFeatures)) setFeatures(prev => mergeById(dbFeatures, prev, 'id'));
+        if (Array.isArray(dbChat)) setChatMessages(prev => mergeById(dbChat, prev, 'id'));
 
         setDbStatus('connected');
       } else {
@@ -248,50 +242,51 @@ export function ProjectProvider({ children }) {
     showToast('Syncing local storage data to MongoDB database...', 'info');
     try {
       const [uRes, pRes, fRes] = await Promise.all([
-        fetch(`${API_BASE}/users`).catch(() => null),
-        fetch(`${API_BASE}/projects`).catch(() => null),
-        fetch(`${API_BASE}/features`).catch(() => null)
+        apiFetch('/users'),
+        apiFetch('/projects'),
+        apiFetch('/features')
       ]);
 
       const dbUsers = (uRes && uRes.ok) ? await uRes.json() : [];
       const dbProjects = (pRes && pRes.ok) ? await pRes.json() : [];
       const dbFeatures = (fRes && fRes.ok) ? await fRes.json() : [];
 
-      const dbUserIds = new Set(dbUsers.map(u => u.id || u.username));
-      const dbProjectIds = new Set(dbProjects.map(p => p.id));
-      const dbFeatureIds = new Set(dbFeatures.map(f => f.id));
+      const dbUserIds = new Set(dbUsers.map(u => String(u.id || u.username)));
+      const dbProjectIds = new Set(dbProjects.map(p => String(p.id)));
+      const dbFeatureIds = new Set(dbFeatures.map(f => String(f.id)));
 
       let syncedCount = 0;
 
       for (const p of projects) {
-        if (!dbProjectIds.has(p.id)) {
-          await fetch(`${API_BASE}/projects`, {
+        if (!dbProjectIds.has(String(p.id))) {
+          await apiFetch('/projects', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(p)
-          }).catch(() => null);
+          });
           syncedCount++;
         }
       }
 
       for (const u of users) {
-        if (!dbUserIds.has(u.id) && !dbUserIds.has(u.username)) {
-          await fetch(`${API_BASE}/users`, {
+        const uKey = String(u.id || u.username);
+        if (!dbUserIds.has(uKey)) {
+          await apiFetch('/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(u)
-          }).catch(() => null);
+          });
           syncedCount++;
         }
       }
 
       for (const f of features) {
-        if (!dbFeatureIds.has(f.id)) {
-          await fetch(`${API_BASE}/features`, {
+        if (!dbFeatureIds.has(String(f.id))) {
+          await apiFetch('/features', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(f)
-          }).catch(() => null);
+          });
           syncedCount++;
         }
       }
@@ -391,48 +386,50 @@ export function ProjectProvider({ children }) {
       ...userObj
     };
     setUsers(prev => [...prev, newUser]);
-    showToast(`Created developer account: User ID "${newUser.username}"!`, 'success');
 
     try {
-      await apiFetch('/users', {
+      const res = await apiFetch('/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
       });
+      if (res && res.ok) {
+        showToast(`Created developer account: User ID "${newUser.username}" (Synced to MongoDB)!`, 'success');
+        setDbStatus('connected');
+      } else {
+        showToast(`Created developer account: User ID "${newUser.username}" (Saved locally)`, 'warning');
+      }
     } catch (err) {
       console.log('MongoDB server offline, saved locally.');
+      showToast(`Created developer account: User ID "${newUser.username}" (Saved locally)`, 'warning');
     }
   };
 
-  const updateUserAccount = (userId, updatedFields) => {
+  const updateUserAccount = async (userId, updatedFields) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updatedFields } : u));
     if (currentUser && currentUser.id === userId) {
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
     }
-    showToast('User credentials updated successfully.', 'success');
 
-    fetch(`${API_BASE}/users/${userId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedFields)
-    }).catch(() => null);
+    try {
+      const res = await apiFetch(`/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedFields)
+      });
+      if (res && res.ok) {
+        showToast('User credentials updated & synced to MongoDB!', 'success');
+        setDbStatus('connected');
+      } else {
+        showToast('User credentials updated locally.', 'info');
+      }
+    } catch (err) {
+      showToast('User credentials updated locally.', 'info');
+    }
   };
 
   const updateUserProfile = async (userId, profileData) => {
-    updateUserAccount(userId, profileData);
-
-    try {
-      const res = await fetch(`${API_BASE}/users/${userId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileData)
-      });
-      if (res.ok) {
-        showToast('Developer profile saved to MongoDB database!', 'success');
-      }
-    } catch (err) {
-      console.log('MongoDB server offline, saved locally to localStorage.');
-    }
+    await updateUserAccount(userId, profileData);
   };
 
   const getDeveloperWorkloadStats = (userOrName) => {
@@ -547,13 +544,15 @@ export function ProjectProvider({ children }) {
     };
   };
 
-  const deleteUserAccount = (userId) => {
+  const deleteUserAccount = async (userId) => {
     setUsers(prev => prev.filter(u => u.id !== userId));
     showToast('User account removed.', 'info');
 
-    fetch(`${API_BASE}/users/${userId}`, {
-      method: 'DELETE'
-    }).catch(() => null);
+    try {
+      await apiFetch(`/users/${userId}`, {
+        method: 'DELETE'
+      });
+    } catch (e) {}
   };
 
   // Chat & Calls Functions
