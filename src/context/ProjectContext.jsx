@@ -227,8 +227,27 @@ export function ProjectProvider({ children }) {
           const channelMsgs = dbChat.filter(m => m && !m.isDirect && (m.channel || !m.recipientId));
           const dmMssgs = dbChat.filter(m => m && (m.isDirect || m.recipientId));
 
-          if (channelMsgs.length > 0) setChatMessages(channelMsgs);
-          if (dmMssgs.length > 0) setDirectMessages(dmMssgs);
+          // MERGE instead of REPLACE - prevents race condition where sent messages flicker
+          if (channelMsgs.length > 0) {
+            setChatMessages(prev => {
+              const existingIds = new Set(prev.map(m => m.id));
+              const newMsgs = channelMsgs.filter(m => !existingIds.has(m.id));
+              if (newMsgs.length === 0) return prev;
+              return [...prev, ...newMsgs].sort((a, b) =>
+                new Date(a.createdAt || 0) - new Date(b.createdAt || 0) || a.id.localeCompare(b.id)
+              );
+            });
+          }
+          if (dmMssgs.length > 0) {
+            setDirectMessages(prev => {
+              const existingIds = new Set(prev.map(m => m.id));
+              const newMsgs = dmMssgs.filter(m => !existingIds.has(m.id));
+              if (newMsgs.length === 0) return prev;
+              return [...prev, ...newMsgs].sort((a, b) =>
+                new Date(a.createdAt || 0) - new Date(b.createdAt || 0) || a.id.localeCompare(b.id)
+              );
+            });
+          }
         }
 
         setDbStatus('connected');
