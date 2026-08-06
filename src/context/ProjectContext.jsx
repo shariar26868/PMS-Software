@@ -33,6 +33,7 @@ export function ProjectProvider({ children }) {
   };
 
   let cachedWorkingBaseUrl = null;
+  const API_BASE = getApiUrl();
 
   const apiFetch = async (endpointPath, options = {}) => {
     const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
@@ -1376,8 +1377,7 @@ export function ProjectProvider({ children }) {
       // DB Status & Sync
       dbStatus,
       syncLocalStorageToDatabase,
-      loadFromMongoDB,
-      API_BASE
+      loadFromMongoDB
     }}>
       {children}
     </ProjectContext.Provider>
