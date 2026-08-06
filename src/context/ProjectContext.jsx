@@ -218,16 +218,16 @@ export function ProjectProvider({ children }) {
           setProjects(dbProjects);
           localStorage.setItem('pm_system_projects_list', JSON.stringify(dbProjects));
         }
-        if (Array.isArray(dbFeatures)) {
+        if (Array.isArray(dbFeatures) && dbFeatures.length > 0) {
           setFeatures(dbFeatures);
           localStorage.setItem('pm_system_features', JSON.stringify(dbFeatures));
         }
-        if (Array.isArray(dbChat)) {
+        if (Array.isArray(dbChat) && dbChat.length > 0) {
           const channelMsgs = dbChat.filter(m => m && !m.isDirect && (m.channel || !m.recipientId));
           const dmMssgs = dbChat.filter(m => m && (m.isDirect || m.recipientId));
 
-          setChatMessages(channelMsgs);
-          setDirectMessages(dmMssgs);
+          if (channelMsgs.length > 0) setChatMessages(channelMsgs);
+          if (dmMssgs.length > 0) setDirectMessages(dmMssgs);
         }
 
         setDbStatus('connected');

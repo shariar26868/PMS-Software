@@ -177,7 +177,7 @@ export default function Navbar() {
             </button>
 
             {/* Admin Manage Users Button */}
-            {currentUser.role === 'admin' && (
+            {currentUser?.role === 'admin' && (
               <button
                 onClick={() => setIsUserManagementModalOpen(true)}
                 className="px-3.5 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0"
