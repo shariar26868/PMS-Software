@@ -69,24 +69,33 @@ export default function TeamCallModal() {
     return canvas.captureStream(30);
   };
 
-  // Camera stream handler
+  // Media Stream (Audio & Video) handler
   useEffect(() => {
     let activeStream = null;
     let isCancelled = false;
 
-    async function initCamera() {
-      if (activeCall && activeCall.type === 'video' && !isCameraOff) {
+    async function initStream() {
+      if (activeCall) {
         try {
-          // Try full video + audio
-          activeStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true });
-          setIsSimulatedStream(false);
+          if (activeCall.type === 'video' && !isCameraOff) {
+            // Try full video + audio
+            activeStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true });
+            setIsSimulatedStream(false);
+          } else {
+            // Audio (Voice Call) stream
+            activeStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            setIsSimulatedStream(false);
+          }
         } catch (err1) {
           try {
-            // Try video only if audio permission failed
-            activeStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            setIsSimulatedStream(false);
+            if (activeCall.type === 'video' && !isCameraOff) {
+              activeStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+              setIsSimulatedStream(false);
+            } else {
+              throw new Error('Audio permission denied');
+            }
           } catch (err2) {
-            console.warn('Physical camera unavailable or permission denied. Using Virtual Camera fallback:', err2);
+            console.warn('Physical media device unavailable or permission denied. Using Virtual Media fallback:', err2);
             activeStream = createSyntheticAvatarStream(currentUser?.name || 'You');
             setIsSimulatedStream(true);
           }
@@ -102,7 +111,7 @@ export default function TeamCallModal() {
       }
     }
 
-    initCamera();
+    initStream();
 
     return () => {
       isCancelled = true;

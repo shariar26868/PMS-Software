@@ -233,7 +233,13 @@ export function ProjectProvider({ children }) {
         if (Array.isArray(dbUsers)) setUsers(prev => mergeById(dbUsers, prev, 'id'));
         if (Array.isArray(dbProjects)) setProjects(prev => mergeById(dbProjects, prev, 'id'));
         if (Array.isArray(dbFeatures)) setFeatures(prev => mergeById(dbFeatures, prev, 'id'));
-        if (Array.isArray(dbChat)) setChatMessages(prev => mergeById(dbChat, prev, 'id'));
+        if (Array.isArray(dbChat)) {
+          const channelMsgs = dbChat.filter(m => m && !m.isDirect && (m.channel || !m.recipientId));
+          const dmMssgs = dbChat.filter(m => m && (m.isDirect || m.recipientId));
+
+          if (channelMsgs.length > 0) setChatMessages(prev => mergeById(channelMsgs, prev, 'id'));
+          if (dmMssgs.length > 0) setDirectMessages(prev => mergeById(dmMssgs, prev, 'id'));
+        }
 
         setDbStatus('connected');
       } else {
@@ -592,28 +598,33 @@ export function ProjectProvider({ children }) {
     showToast('Left the call.', 'info');
   };
 
-  const sendDirectMessage = (recipientId, text) => {
+  const sendDirectMessage = async (recipientId, text) => {
     if (!currentUser) return;
     const now = new Date();
     const timestampStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const newDM = {
       id: `dm-${Date.now()}`,
+      projectId: activeProjectId,
       senderId: currentUser.id,
       recipientId,
       senderName: currentUser.name,
+      senderRole: currentUser.role === 'admin' ? '👑 Admin / PM' : `💻 ${currentUser.devRole || 'Developer'}`,
       senderAvatar: currentUser.avatar,
       text,
-      timestamp: timestampStr
+      timestamp: timestampStr,
+      isDirect: true
     };
 
     setDirectMessages(prev => [...prev, newDM]);
 
-    fetch(`${API_BASE}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newDM)
-    }).catch(() => null);
+    try {
+      await apiFetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDM)
+      });
+    } catch (e) {}
   };
 
   const createChatChannel = ({ name, description }) => {
@@ -629,7 +640,7 @@ export function ProjectProvider({ children }) {
     return slug;
   };
 
-  const sendChatMessage = (channel, text) => {
+  const sendChatMessage = async (channel, text) => {
     if (!currentUser) return;
     const now = new Date();
     const timestampStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -638,20 +649,24 @@ export function ProjectProvider({ children }) {
       id: `msg-${Date.now()}`,
       projectId: activeProjectId,
       channel,
+      senderId: currentUser.id,
       senderName: currentUser.name,
       senderRole: currentUser.role === 'admin' ? '👑 Admin / PM' : `💻 ${currentUser.devRole || 'Developer'}`,
       senderAvatar: currentUser.avatar,
       text,
-      timestamp: timestampStr
+      timestamp: timestampStr,
+      isDirect: false
     };
 
     setChatMessages(prev => [...prev, newMsg]);
 
-    fetch(`${API_BASE}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newMsg)
-    }).catch(() => null);
+    try {
+      await apiFetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMsg)
+      });
+    } catch (e) {}
   };
 
   const injectSystemChatNotification = (text) => {
