@@ -329,7 +329,18 @@ export default function TeamChatView() {
 
                 return (
                   <div key={msg.id} className="flex items-start gap-3 group">
-                    <img src={msg.senderAvatar} alt={msg.senderName} className="w-8 h-8 rounded-full border border-slate-700 shrink-0 mt-0.5 object-cover" />
+                    {msg.senderAvatar ? (
+                      <img
+                        src={msg.senderAvatar}
+                        alt={msg.senderName}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                        className="w-8 h-8 rounded-full border border-slate-700 shrink-0 mt-0.5 object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-[10px] font-bold text-purple-200 shrink-0 mt-0.5">
+                        {(msg.senderName || 'U')[0].toUpperCase()}
+                      </div>
+                    )}
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-200">{msg.senderName}</span>
@@ -358,7 +369,18 @@ export default function TeamChatView() {
 
                 return (
                   <div key={msg.id} className={`flex items-start gap-3 ${isMe ? 'flex-row-reverse' : ''}`}>
-                    <img src={msg.senderAvatar} alt={msg.senderName} className="w-8 h-8 rounded-full border border-slate-700 shrink-0 object-cover" />
+                    {msg.senderAvatar ? (
+                      <img
+                        src={msg.senderAvatar}
+                        alt={msg.senderName}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                        className="w-8 h-8 rounded-full border border-slate-700 shrink-0 object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-[10px] font-bold text-purple-200 shrink-0">
+                        {(msg.senderName || 'U')[0].toUpperCase()}
+                      </div>
+                    )}
                     <div className={`space-y-1 ${isMe ? 'text-right' : ''}`}>
                       <div className={`flex items-center gap-2 ${isMe ? 'justify-end' : ''}`}>
                         <span className="text-xs font-bold text-slate-200">{msg.senderName}</span>

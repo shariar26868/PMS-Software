@@ -32,22 +32,39 @@ export function ProjectProvider({ children }) {
     return getApiCandidateUrls()[0];
   };
 
-  const API_BASE = getApiUrl();
+  let cachedWorkingBaseUrl = null;
 
   const apiFetch = async (endpointPath, options = {}) => {
+    const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+
+    if (cachedWorkingBaseUrl) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(`${cachedWorkingBaseUrl}${cleanPath}`, {
+          ...options,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res && res.ok) return res;
+      } catch (e) {
+        cachedWorkingBaseUrl = null;
+      }
+    }
+
     const candidateUrls = getApiCandidateUrls();
     for (const baseUrl of candidateUrls) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
       try {
         const cleanBase = baseUrl.replace(/\/+$/, '');
-        const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
         const res = await fetch(`${cleanBase}${cleanPath}`, {
           ...options,
           signal: controller.signal
         });
         clearTimeout(timeoutId);
         if (res && res.ok) {
+          cachedWorkingBaseUrl = cleanBase;
           return res;
         }
       } catch (e) {
@@ -220,12 +237,12 @@ export function ProjectProvider({ children }) {
     }
   };
 
-  // Real-time Live Polling Interval (fetches new messages & data every 3s without page reload)
+  // Real-time Live Polling Interval (fetches new messages & data every 1.5s without page reload)
   useEffect(() => {
     loadFromMongoDB();
     const pollInterval = setInterval(() => {
       loadFromMongoDB();
-    }, 3000);
+    }, 1500);
     return () => clearInterval(pollInterval);
   }, []);
 
