@@ -21,6 +21,7 @@ import DevProfilesView from './components/DevProfilesView';
 import ProjectDeadlineModal from './components/ProjectDeadlineModal';
 import Toast from './components/Toast';
 import ModuleFilterDropdown from './components/ModuleFilterDropdown';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Filter, Sparkles, Plus } from 'lucide-react';
 
 function DashboardContent() {
@@ -110,66 +111,68 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* Tab 1: Module Overview */}
-        {activeTab === 'modules' && (
-          <div className="space-y-6">
-            {/* Module cards */}
-            {moduleList
-              .filter(m => activeModuleFilter === 'All' || activeModuleFilter === m)
-              .map((moduleName) => (
-                <ModuleProgressCard
-                  key={moduleName}
-                  moduleName={moduleName}
-                  onSelectFeature={setSelectedFeatureDetail}
-                />
-              ))}
-          </div>
-        )}
-
-        {/* Tab 2: All Features Grid */}
-        {activeTab === 'features' && (
-          <div>
-            {filteredFeatures.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
-                <p className="text-slate-400 text-sm">No features found matching the active criteria.</p>
-                {canEdit && (
-                  <div className="flex justify-center gap-3 pt-2">
-                    <button onClick={() => setIsImporterOpen(true)} className="px-4 py-2 rounded-xl bg-indigo-600 text-xs font-semibold">🤖 Import via AI</button>
-                    <button onClick={() => setIsManualModalOpen(true)} className="px-4 py-2 rounded-xl bg-slate-800 text-xs font-semibold">Add Manually</button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredFeatures.map((feature) => (
-                  <FeatureCard
-                    key={feature.id}
-                    feature={feature}
-                    onSelect={setSelectedFeatureDetail}
+        <ErrorBoundary>
+          {/* Tab 1: Module Overview */}
+          {activeTab === 'modules' && (
+            <div className="space-y-6">
+              {/* Module cards */}
+              {moduleList
+                .filter(m => activeModuleFilter === 'All' || activeModuleFilter === m)
+                .map((moduleName) => (
+                  <ModuleProgressCard
+                    key={moduleName}
+                    moduleName={moduleName}
+                    onSelectFeature={setSelectedFeatureDetail}
                   />
                 ))}
-              </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {/* Tab 3: Sprint Board */}
-        {activeTab === 'kanban' && <SprintBoardView />}
+          {/* Tab 2: All Features Grid */}
+          {activeTab === 'features' && (
+            <div>
+              {filteredFeatures.length === 0 ? (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
+                  <p className="text-slate-400 text-sm">No features found matching the active criteria.</p>
+                  {canEdit && (
+                    <div className="flex justify-center gap-3 pt-2">
+                      <button onClick={() => setIsImporterOpen(true)} className="px-4 py-2 rounded-xl bg-indigo-600 text-xs font-semibold">🤖 Import via AI</button>
+                      <button onClick={() => setIsManualModalOpen(true)} className="px-4 py-2 rounded-xl bg-slate-800 text-xs font-semibold">Add Manually</button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredFeatures.map((feature) => (
+                    <FeatureCard
+                      key={feature.id}
+                      feature={feature}
+                      onSelect={setSelectedFeatureDetail}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* Tab 4: Interactive Gantt Timeline */}
-        {activeTab === 'gantt' && <GanttTimelineView />}
+          {/* Tab 3: Sprint Board */}
+          {activeTab === 'kanban' && <SprintBoardView />}
 
-        {/* Tab 5: Team Chat */}
-        {activeTab === 'chat' && <TeamChatView />}
+          {/* Tab 4: Interactive Gantt Timeline */}
+          {activeTab === 'gantt' && <GanttTimelineView />}
 
-        {/* Tab 6: Vault & Config */}
-        {activeTab === 'vault' && <ProjectVaultView />}
+          {/* Tab 5: Team Chat */}
+          {activeTab === 'chat' && <TeamChatView />}
 
-        {/* Tab 7: Analytics */}
-        {activeTab === 'analytics' && <AnalyticsView />}
+          {/* Tab 6: Vault & Config */}
+          {activeTab === 'vault' && <ProjectVaultView />}
 
-        {/* Tab 8: Developer Profiles & Workload % */}
-        {activeTab === 'dev-profiles' && <DevProfilesView />}
+          {/* Tab 7: Analytics */}
+          {activeTab === 'analytics' && <AnalyticsView />}
+
+          {/* Tab 8: Developer Profiles & Workload % */}
+          {activeTab === 'dev-profiles' && <DevProfilesView />}
+        </ErrorBoundary>
 
       </main>
 

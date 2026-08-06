@@ -4,7 +4,7 @@ import { Kanban, Sparkles, CheckCircle2, ChevronRight, User, CheckSquare, HelpCi
 
 export default function SprintBoardView() {
   const {
-    filteredFeatures,
+    filteredFeatures = [],
     moveFeatureStatus,
     setSelectedFeatureDetail,
     setSubtaskGenTargetFeature,
@@ -18,6 +18,8 @@ export default function SprintBoardView() {
     { id: 'QA', label: 'QA Testing', color: 'border-pink-500/30 bg-pink-950/20 text-pink-400', badge: 'bg-pink-500/20 text-pink-300' },
     { id: 'Done', label: 'Done', color: 'border-emerald-500/30 bg-emerald-950/20 text-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300' }
   ];
+
+  const safeFeatures = Array.isArray(filteredFeatures) ? filteredFeatures : [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -42,7 +44,7 @@ export default function SprintBoardView() {
       {/* Board Columns Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
         {columns.map((col) => {
-          const colFeatures = filteredFeatures.filter(f => f.status === col.id);
+          const colFeatures = safeFeatures.filter(f => f && f.status === col.id);
 
           return (
             <div key={col.id} className={`border rounded-2xl p-4 flex flex-col min-w-[260px] ${col.color}`}>
@@ -65,9 +67,12 @@ export default function SprintBoardView() {
                   </div>
                 ) : (
                   colFeatures.map((feature) => {
-                    const progress = getFeatureProgress(feature);
-                    const completedSubtasks = feature.subtasks ? feature.subtasks.filter(s=>s.completed).length : 0;
+                    if (!feature) return null;
+                    const progress = getFeatureProgress ? getFeatureProgress(feature) : 0;
+                    const completedSubtasks = feature.subtasks ? feature.subtasks.filter(s => s && s.completed).length : 0;
                     const totalSubtasks = feature.subtasks ? feature.subtasks.length : 0;
+                    const devName = feature.assignedDev || 'Unassigned';
+                    const devFirstName = devName.split(' ')[0];
 
                     return (
                       <div
@@ -77,22 +82,22 @@ export default function SprintBoardView() {
                         {/* Top Badges */}
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-indigo-300">
-                            {feature.module}
+                            {feature.module || 'General'}
                           </span>
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                             feature.priority === 'Critical' ? 'bg-red-500/20 text-red-400' :
                             feature.priority === 'High' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-400'
                           }`}>
-                            {feature.priority}
+                            {feature.priority || 'Medium'}
                           </span>
                         </div>
 
                         {/* Title */}
                         <h4
-                          onClick={() => setSelectedFeatureDetail(feature)}
+                          onClick={() => setSelectedFeatureDetail && setSelectedFeatureDetail(feature)}
                           className="text-xs font-bold text-slate-100 hover:text-indigo-400 cursor-pointer transition-colors"
                         >
-                          {feature.name}
+                          {feature.name || 'Unnamed Feature'}
                         </h4>
 
                         {/* Progress Bar */}
@@ -112,14 +117,20 @@ export default function SprintBoardView() {
                         {/* Dev & Quick Move */}
                         <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
                           <div className="flex items-center gap-1.5">
-                            <img src={feature.devAvatar} alt={feature.assignedDev} className="w-5 h-5 rounded-full" />
-                            <span className="text-[11px] text-slate-300">{feature.assignedDev.split(' ')[0]}</span>
+                            {feature.devAvatar ? (
+                              <img src={feature.devAvatar} alt={devName} className="w-5 h-5 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-300">
+                                {devName[0]?.toUpperCase() || 'U'}
+                              </div>
+                            )}
+                            <span className="text-[11px] text-slate-300 truncate max-w-[80px]">{devFirstName}</span>
                           </div>
 
                           {/* Quick Stage Move Dropdown */}
                           <select
-                            value={feature.status}
-                            onChange={(e) => moveFeatureStatus(feature.id, e.target.value)}
+                            value={feature.status || col.id}
+                            onChange={(e) => moveFeatureStatus && moveFeatureStatus(feature.id, e.target.value)}
                             className="bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-300 hover:text-white focus:outline-none cursor-pointer"
                           >
                             <option value="To Do">Move: To Do</option>
@@ -144,3 +155,4 @@ export default function SprintBoardView() {
     </div>
   );
 }
+
