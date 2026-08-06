@@ -174,7 +174,7 @@ export function ProjectProvider({ children }) {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Fetch live state from MongoDB backend API with smart merge
+  // Fetch live state from MongoDB backend API
   const loadFromMongoDB = async () => {
     try {
       const usersRes = await apiFetch('/users');
@@ -190,55 +190,24 @@ export function ProjectProvider({ children }) {
         const dbFeatures = (fRes && fRes.ok) ? await fRes.json() : [];
         const dbChat = (cRes && cRes.ok) ? await cRes.json() : [];
 
-        // Auto-sync any local users that exist in localStorage but not in MongoDB
-        const dbUserKeys = new Set(dbUsers.map(u => String(u.id || u.username)));
-        const savedLocalUsersStr = localStorage.getItem('pm_system_users');
-        if (savedLocalUsersStr) {
-          try {
-            const localUsers = JSON.parse(savedLocalUsersStr);
-            for (const lu of localUsers) {
-              const luKey = String(lu.id || lu.username);
-              if (luKey && !dbUserKeys.has(luKey)) {
-                await apiFetch('/users', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(lu)
-                });
-                dbUsers.push(lu);
-                dbUserKeys.add(luKey);
-              }
-            }
-          } catch (e) {}
+        if (Array.isArray(dbUsers) && dbUsers.length > 0) {
+          setUsers(dbUsers);
+          localStorage.setItem('pm_system_users', JSON.stringify(dbUsers));
         }
-
-        const mergeById = (dbItems, localItems, idField = 'id') => {
-          if (!Array.isArray(dbItems)) return localItems || [];
-          if (!Array.isArray(localItems)) return dbItems || [];
-          const map = new Map();
-          localItems.forEach(item => {
-            if (item && (item[idField] || item.username)) {
-              map.set(String(item[idField] || item.username), item);
-            }
-          });
-          dbItems.forEach(item => {
-            if (item && (item[idField] || item.username)) {
-              const key = String(item[idField] || item.username);
-              const existing = map.get(key);
-              map.set(key, existing ? { ...existing, ...item } : item);
-            }
-          });
-          return Array.from(map.values());
-        };
-
-        if (Array.isArray(dbUsers)) setUsers(prev => mergeById(dbUsers, prev, 'id'));
-        if (Array.isArray(dbProjects)) setProjects(prev => mergeById(dbProjects, prev, 'id'));
-        if (Array.isArray(dbFeatures)) setFeatures(prev => mergeById(dbFeatures, prev, 'id'));
+        if (Array.isArray(dbProjects) && dbProjects.length > 0) {
+          setProjects(dbProjects);
+          localStorage.setItem('pm_system_projects_list', JSON.stringify(dbProjects));
+        }
+        if (Array.isArray(dbFeatures)) {
+          setFeatures(dbFeatures);
+          localStorage.setItem('pm_system_features', JSON.stringify(dbFeatures));
+        }
         if (Array.isArray(dbChat)) {
           const channelMsgs = dbChat.filter(m => m && !m.isDirect && (m.channel || !m.recipientId));
           const dmMssgs = dbChat.filter(m => m && (m.isDirect || m.recipientId));
 
-          if (channelMsgs.length > 0) setChatMessages(prev => mergeById(channelMsgs, prev, 'id'));
-          if (dmMssgs.length > 0) setDirectMessages(prev => mergeById(dmMssgs, prev, 'id'));
+          setChatMessages(channelMsgs);
+          setDirectMessages(dmMssgs);
         }
 
         setDbStatus('connected');
@@ -251,8 +220,13 @@ export function ProjectProvider({ children }) {
     }
   };
 
+  // Real-time Live Polling Interval (fetches new messages & data every 3s without page reload)
   useEffect(() => {
     loadFromMongoDB();
+    const pollInterval = setInterval(() => {
+      loadFromMongoDB();
+    }, 3000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   // Sync locally stored projects/users/features to MongoDB
