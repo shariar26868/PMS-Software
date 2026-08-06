@@ -50,9 +50,20 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-// Start Express Server immediately on Port 5000
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Express Server running on http://127.0.0.1:${PORT}`);
+// Start Express Server (Defaults to Port 80 for direct domain/IP access, fallback to 5000)
+const PORT = process.env.PORT || 80;
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Express Server running on http://0.0.0.0:${PORT}`);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE' && PORT !== 5000) {
+    console.log(`Port ${PORT} is in use, falling back to Port 5000...`);
+    app.listen(5000, '0.0.0.0', () => {
+      console.log(`🚀 Express Server running on http://0.0.0.0:5000`);
+    });
+  }
 });
 
 // Database Connection & Auto Seed Logic (Async)
