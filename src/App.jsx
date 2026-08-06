@@ -195,7 +195,9 @@ function DashboardContent() {
 export default function App() {
   return (
     <ProjectProvider>
-      <DashboardContent />
+      <ErrorBoundary>
+        <DashboardContent />
+      </ErrorBoundary>
     </ProjectProvider>
   );
 }

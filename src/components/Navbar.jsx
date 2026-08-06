@@ -46,19 +46,19 @@ export default function Navbar() {
                 {/* Project Switcher Select */}
                 <div className="relative group">
                   <select
-                    value={activeProjectId}
+                    value={activeProjectId || ''}
                     onChange={(e) => setActiveProjectId(e.target.value)}
                     className="bg-slate-900 border border-slate-700/80 hover:border-indigo-500 rounded-xl px-3 py-1 pr-8 text-sm font-bold text-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none shadow-sm transition-all"
                   >
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                    {(projects || []).filter(Boolean).map((p) => (
+                      <option key={p.id} value={p.id}>{p.name || 'Project'}</option>
                     ))}
                   </select>
                   <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
 
                 {/* + New Project Button */}
-                {currentUser.role === 'admin' && (
+                {currentUser?.role === 'admin' && (
                   <button
                     onClick={() => setIsNewProjectModalOpen(true)}
                     className="px-2 py-1 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold flex items-center gap-1 transition-all"
@@ -70,7 +70,7 @@ export default function Navbar() {
                 )}
               </div>
 
-              <p className="text-xs text-slate-400 truncate max-w-xs">{activeProject.description}</p>
+              <p className="text-xs text-slate-400 truncate max-w-xs">{activeProject?.description || ''}</p>
             </div>
           </div>
 
@@ -91,28 +91,28 @@ export default function Navbar() {
 
             {/* Target Completion Date Badge */}
             {(() => {
-              const info = getProjectTimelineInfo(activeProject);
+              const info = (getProjectTimelineInfo && getProjectTimelineInfo(activeProject)) || { targetCompletionDate: 'N/A', status: 'On Track', daysRemaining: 0 };
               return (
                 <button
-                  onClick={() => setIsDeadlineModalOpen(true)}
+                  onClick={() => setIsDeadlineModalOpen && setIsDeadlineModalOpen(true)}
                   className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-indigo-500/50 rounded-xl px-3 py-1.5 text-left transition-all group"
                   title="Click to set or edit target completion date"
                 >
                   <Calendar className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Target: {info.targetCompletionDate}</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Target: {info.targetCompletionDate || 'N/A'}</span>
                       <span className={`text-[9px] font-bold px-1 rounded ${
                         info.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-400' :
                         info.status === 'Overdue' ? 'bg-rose-500/20 text-rose-400' :
                         info.status === 'At Risk' ? 'bg-amber-500/20 text-amber-400' :
                         'bg-indigo-500/20 text-indigo-300'
                       }`}>
-                        {info.status}
+                        {info.status || 'On Track'}
                       </span>
                     </div>
                     <span className="text-xs font-bold text-slate-200 font-mono block leading-none mt-0.5">
-                      {info.daysRemaining >= 0 ? `⏳ ${info.daysRemaining} Days Remaining` : `⚠️ ${Math.abs(info.daysRemaining)} Days Overdue`}
+                      {(info.daysRemaining ?? 0) >= 0 ? `⏳ ${info.daysRemaining ?? 0} Days Remaining` : `⚠️ ${Math.abs(info.daysRemaining ?? 0)} Days Overdue`}
                     </span>
                   </div>
                 </button>
@@ -144,11 +144,24 @@ export default function Navbar() {
             
             {/* User Badge */}
             <div className="flex items-center gap-2.5 bg-slate-900 border border-slate-700/80 px-3.5 py-2 rounded-xl shrink-0 shadow-sm">
-              <img src={currentUser.avatar} alt={currentUser.name} className="w-7 h-7 rounded-full ring-2 ring-indigo-400/40 object-cover shrink-0" />
+              {currentUser?.avatar ? (
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name || 'User'}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                  className="w-7 h-7 rounded-full ring-2 ring-indigo-400/40 object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-xs font-bold text-indigo-300 shrink-0">
+                  {(currentUser?.name || 'U')[0].toUpperCase()}
+                </div>
+              )}
               <div className="text-left whitespace-nowrap">
-                <span className="text-xs font-bold text-slate-100 block leading-tight">{currentUser.name.split(' ')[0]}</span>
+                <span className="text-xs font-bold text-slate-100 block leading-tight">
+                  {(currentUser?.name || 'User').split(' ')[0]}
+                </span>
                 <span className="text-[10px] text-indigo-400 font-mono block leading-tight uppercase font-semibold">
-                  {currentUser.role === 'admin' ? '👑 ADMIN' : '💻 DEV'}
+                  {currentUser?.role === 'admin' ? '👑 ADMIN' : '💻 DEV'}
                 </span>
               </div>
             </div>
