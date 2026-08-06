@@ -87,9 +87,12 @@ export function ProjectProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('pm_system_current_user');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id) return parsed;
+      } catch (e) { console.error(e); }
     }
-    return null;
+    return INITIAL_USERS[0];
   });
 
   // Projects List State
